@@ -117,6 +117,7 @@ async function parallelMap<T, R>(
   concurrency: number,
   onProgress?: (completed: number, total: number) => void
 ): Promise<R[]> {
+  const safeConcurrency = concurrency < 1 ? 1 : concurrency;
   const results: R[] = new Array(items.length);
   let index = 0;
   let completed = 0;
@@ -132,7 +133,7 @@ async function parallelMap<T, R>(
   }
 
   // Start workers
-  const workers = Array(Math.min(concurrency, items.length))
+  const workers = Array(Math.min(safeConcurrency, items.length))
     .fill(null)
     .map(() => worker());
 
@@ -144,8 +145,11 @@ export async function lookupBatch(
   inputs: string[],
   options: LookupOptions
 ): Promise<GeoResult[]> {
+  const defaultConcurrency = options.provider === 'local' ? 50 : 10;
   const effectiveConcurrency =
-    options.provider === 'local' ? (options.concurrency ?? 50) : (options.concurrency ?? 10);
+    options.concurrency == null || options.concurrency < 1
+      ? defaultConcurrency
+      : options.concurrency;
 
   return parallelMap(
     inputs,
