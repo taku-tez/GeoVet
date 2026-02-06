@@ -6,7 +6,7 @@
  * ASM向け地理情報特定ツール
  */
 
-import { program } from 'commander';
+import { program, Option } from 'commander';
 import { createInterface } from 'readline';
 import { readFile } from 'fs/promises';
 import { createRequire } from 'module';
@@ -18,6 +18,8 @@ import type { ProviderType, LookupOptions } from './types.js';
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
 
+const providerChoices = ['local', 'ipinfo', 'auto'] as const;
+
 program
   .name('geovet')
   .description('IP/Endpoint Geolocation CLI - ASM向け地理情報特定ツール')
@@ -28,7 +30,11 @@ program
   .command('lookup')
   .description('Look up geolocation for IP addresses or domains')
   .argument('[targets...]', 'IP addresses or domains to look up')
-  .option('-p, --provider <type>', 'Provider: local, ipinfo, auto', 'local')
+  .addOption(
+    new Option('-p, --provider <type>', 'Provider: local, ipinfo, auto')
+      .choices([...providerChoices])
+      .default('local'),
+  )
   .option('-f, --file <path>', 'Read targets from file (one per line)')
   .option('--stdin', 'Read targets from stdin')
   .option('-j, --json', 'Output as JSON')
@@ -37,6 +43,12 @@ program
   .option('--progress', 'Show progress for large batches')
   .option('-v, --verbose', 'Verbose output')
   .action(async (targets: string[], options) => {
+    if (!providerChoices.includes(options.provider)) {
+      console.error(`Invalid provider: ${options.provider}`);
+      console.error(`Choose from: ${providerChoices.join(', ')}`);
+      process.exit(1);
+    }
+
     const provider = options.provider as ProviderType;
     
     // Validate concurrency
