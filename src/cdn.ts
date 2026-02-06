@@ -395,6 +395,89 @@ const CDN_IP_PREFIXES: Array<[string, string, CdnInfo['type']]> = [
   ['76.76.21.', 'Vercel', 'hosting'],
 ];
 
+const CDN_IPV6_CIDR_PREFIXES: Array<[string, string, CdnInfo['type']]> = [
+  // Cloudflare
+  ['2400:cb00::/32', 'Cloudflare', 'cdn'],
+  ['2606:4700::/32', 'Cloudflare', 'cdn'],
+  ['2803:f800::/32', 'Cloudflare', 'cdn'],
+  ['2405:b500::/32', 'Cloudflare', 'cdn'],
+  ['2405:8100::/32', 'Cloudflare', 'cdn'],
+  ['2a06:98c0::/29', 'Cloudflare', 'cdn'],
+  ['2c0f:f248::/32', 'Cloudflare', 'cdn'],
+
+  // Amazon CloudFront (AWS global)
+  ['2600:9000::/28', 'Amazon CloudFront', 'cdn'],
+
+  // Fastly
+  ['2a04:4e42::/32', 'Fastly', 'cdn'],
+];
+
+function ipv6ToBigInt(ip: string): bigint | null {
+  if (!ip.includes(':')) {
+    return null;
+  }
+
+  const [head, tail] = ip.split('::');
+  const headParts = head ? head.split(':').filter(Boolean) : [];
+  const tailParts = tail ? tail.split(':').filter(Boolean) : [];
+
+  const normalizedTailParts = tailParts.flatMap((part) => {
+    if (part.includes('.')) {
+      const ipv4Parts = part.split('.').map((value) => Number.parseInt(value, 10));
+      if (ipv4Parts.length !== 4 || ipv4Parts.some((value) => Number.isNaN(value))) {
+        return [];
+      }
+      const high = ((ipv4Parts[0] << 8) | ipv4Parts[1]).toString(16);
+      const low = ((ipv4Parts[2] << 8) | ipv4Parts[3]).toString(16);
+      return [high, low];
+    }
+    return [part];
+  });
+
+  const missingGroups = 8 - (headParts.length + normalizedTailParts.length);
+  if (missingGroups < 0) {
+    return null;
+  }
+
+  const fullParts = [
+    ...headParts,
+    ...Array.from({ length: missingGroups }, () => '0'),
+    ...normalizedTailParts,
+  ];
+
+  if (fullParts.length !== 8) {
+    return null;
+  }
+
+  const values = fullParts.map((part) => Number.parseInt(part, 16));
+  if (values.some((value) => Number.isNaN(value) || value < 0 || value > 0xffff)) {
+    return null;
+  }
+
+  return values.reduce((acc, value) => (acc << 16n) + BigInt(value), 0n);
+}
+
+function isIpv6InCidr(ip: string, cidr: string): boolean {
+  const [network, prefixLengthValue] = cidr.split('/');
+  const prefixLength = Number.parseInt(prefixLengthValue ?? '128', 10);
+  if (Number.isNaN(prefixLength) || prefixLength < 0 || prefixLength > 128) {
+    return false;
+  }
+
+  const ipValue = ipv6ToBigInt(ip);
+  const networkValue = ipv6ToBigInt(network);
+  if (ipValue === null || networkValue === null) {
+    return false;
+  }
+
+  if (prefixLength === 0) {
+    return true;
+  }
+
+  const mask = ((1n << BigInt(prefixLength)) - 1n) << BigInt(128 - prefixLength);
+  return (ipValue & mask) === (networkValue & mask);
+}
+
 /**
  * Detect if IP/ASN belongs to a CDN
  */
@@ -423,6 +506,20 @@ export function detectCdn(
           provider,
           type,
           note: `Detected by hostname. Location shows ${type === 'cdn' ? 'edge server' : 'cloud region'}, not origin.`,
+        };
+      }
+    }
+  }
+
+  // Check by IPv6 CIDR
+  if (ip.includes(':')) {
+    for (const [cidr, provider, type] of CDN_IPV6_CIDR_PREFIXES) {
+      if (isIpv6InCidr(ip, cidr)) {
+        return {
+          isCdn: true,
+          provider,
+          type,
+          note: `Detected by IP range. Location shows ${type === 'cdn' ? 'edge server' : 'cloud region'}, not origin.`,
         };
       }
     }
@@ -460,6 +557,6 @@ export function getCdnRuleCount(): { asn: number; hostname: number; ip: number }
   return {
     asn: Object.keys(CDN_ASNS).length,
     hostname: CDN_HOSTNAME_PATTERNS.length,
-    ip: CDN_IP_PREFIXES.length,
+    ip: CDN_IP_PREFIXES.length + CDN_IPV6_CIDR_PREFIXES.length,
   };
 }
