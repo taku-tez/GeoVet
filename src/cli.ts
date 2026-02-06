@@ -85,18 +85,24 @@ program
 
     // Progress callback
     if (options.progress && inputs.length > 1 && !options.json) {
-      lookupOptions.onProgress = (completed, total) => {
-        const pct = Math.round((completed / total) * 100);
-        const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
-        process.stderr.write(`\r${bar} ${pct}% (${completed}/${total})`);
-      };
+      if (process.stderr.isTTY) {
+        lookupOptions.onProgress = (completed, total) => {
+          const pct = Math.round((completed / total) * 100);
+          const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
+          process.stderr.write(`\r${bar} ${pct}% (${completed}/${total})`);
+        };
+      } else {
+        lookupOptions.onProgress = (completed, total) => {
+          process.stderr.write(`Progress: ${completed}/${total}\n`);
+        };
+      }
     }
 
     // Perform lookups
     const results = await lookupBatch(inputs, lookupOptions);
 
     // Clear progress line
-    if (options.progress && inputs.length > 1 && !options.json) {
+    if (options.progress && inputs.length > 1 && !options.json && process.stderr.isTTY) {
       process.stderr.write('\r' + ' '.repeat(50) + '\r');
     }
 
