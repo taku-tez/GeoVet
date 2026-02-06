@@ -2,9 +2,114 @@
  * GeoVet - Lookup Tests
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { lookup, lookupBatch } from './lookup.js';
 import type { LookupOptions } from './types.js';
+
+const dnsMocks = vi.hoisted(() => ({
+  resolve4: vi.fn<[string], Promise<string[]>>(),
+  resolve6: vi.fn<[string], Promise<string[]>>(),
+}));
+
+vi.mock('dns/promises', () => ({
+  resolve4: dnsMocks.resolve4,
+  resolve6: dnsMocks.resolve6,
+}));
+
+const ipinfoResponses: Record<string, Record<string, string>> = {
+  '8.8.8.8': {
+    ip: '8.8.8.8',
+    country: 'US',
+    region: 'California',
+    city: 'Mountain View',
+    loc: '37.4056,-122.0775',
+    org: 'AS15169 Google LLC',
+  },
+  '1.1.1.1': {
+    ip: '1.1.1.1',
+    country: 'US',
+    region: 'California',
+    city: 'Los Angeles',
+    loc: '34.0522,-118.2437',
+    org: 'AS13335 Cloudflare, Inc.',
+  },
+  '8.8.4.4': {
+    ip: '8.8.4.4',
+    country: 'US',
+    region: 'California',
+    city: 'Mountain View',
+    loc: '37.4056,-122.0775',
+    org: 'AS15169 Google LLC',
+  },
+  '13.33.235.1': {
+    ip: '13.33.235.1',
+    country: 'US',
+    region: 'Washington',
+    city: 'Seattle',
+    loc: '47.6062,-122.3321',
+    org: 'AS16509 Amazon.com, Inc.',
+  },
+  '192.168.1.1': {
+    ip: '192.168.1.1',
+    country: 'US',
+    region: 'New York',
+    city: 'New York',
+    loc: '40.7128,-74.0060',
+    org: 'AS15169 Google LLC',
+  },
+  '2001:4860:4860::8888': {
+    ip: '2001:4860:4860::8888',
+    country: 'US',
+    region: 'California',
+    city: 'Mountain View',
+    loc: '37.4056,-122.0775',
+    org: 'AS15169 Google LLC',
+  },
+};
+
+beforeEach(() => {
+  dnsMocks.resolve4.mockImplementation(async (hostname: string) => {
+    if (hostname === 'google.com') {
+      return ['8.8.8.8'];
+    }
+    if (hostname === 'invalid.nonexistent.tld') {
+      throw new Error('No DNS records');
+    }
+    return [];
+  });
+
+  dnsMocks.resolve6.mockImplementation(async (hostname: string) => {
+    if (hostname === 'google.com') {
+      return ['2001:4860:4860::8888'];
+    }
+    if (hostname === 'invalid.nonexistent.tld') {
+      throw new Error('No DNS records');
+    }
+    return [];
+  });
+
+  vi.stubGlobal('fetch', vi.fn(async (input: string | URL) => {
+    const url = new URL(input.toString());
+    const [ip] = url.pathname.split('/').filter(Boolean);
+    const data = ip ? ipinfoResponses[ip] : undefined;
+
+    if (!data) {
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        json: async () => ({}),
+      } as Response;
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => data,
+    } as Response;
+  }));
+});
 
 describe('lookup', () => {
   describe('with ipinfo provider', () => {
@@ -26,8 +131,8 @@ describe('lookup', () => {
       const result = await lookup('google.com', options);
       
       expect(result.input).toBe('google.com');
-      expect(result.ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
-      expect(result.geo.countryCode).toBeDefined();
+      expect(result.ip).toBe('8.8.8.8');
+      expect(result.geo.countryCode).toBe('US');
       expect(result.error).toBeUndefined();
     });
 
