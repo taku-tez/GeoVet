@@ -5,14 +5,14 @@
 import { isIP } from 'net';
 import { resolve4, resolve6 } from 'dns/promises';
 import type { GeoResult, GeoProvider, LookupOptions, ProviderType } from './types.js';
-import { localProvider } from './providers/local.js';
+import { localProvider, createLocalProvider } from './providers/local.js';
 import { createIpinfoProvider } from './providers/ipinfo.js';
 import { detectCdn } from './cdn.js';
 
-function getProvider(type: ProviderType, apiKey?: string): GeoProvider {
+function getProvider(type: ProviderType, apiKey?: string, dbPath?: string): GeoProvider {
   switch (type) {
     case 'local':
-      return localProvider;
+      return createLocalProvider(dbPath);
     case 'ipinfo':
       return createIpinfoProvider(apiKey);
     case 'auto':
@@ -69,7 +69,7 @@ export async function lookup(input: string, options: LookupOptions): Promise<Geo
   // Handle auto provider
   if (options.provider === 'auto') {
     // Try local first
-    const local = localProvider;
+    const local = createLocalProvider(options.dbPath);
     if (await local.isAvailable()) {
       const localResult = await local.lookup(ip);
       if (!localResult.error) {
@@ -85,7 +85,7 @@ export async function lookup(input: string, options: LookupOptions): Promise<Geo
       result = { ...(await ipinfo.lookup(ip)), input };
     }
   } else {
-    const provider = getProvider(options.provider, apiKey);
+    const provider = getProvider(options.provider, apiKey, options.dbPath);
     result = { ...(await provider.lookup(ip)), input };
   }
 

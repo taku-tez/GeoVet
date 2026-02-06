@@ -32,6 +32,7 @@ program
   .option('-j, --json', 'Output as JSON')
   .option('--summary', 'Show summary statistics')
   .option('-c, --concurrency <num>', 'Parallel lookups (default: 10, local: 50)', '10')
+  .option('--db-path <path>', 'Path to GeoLite2 database directory')
   .option('--progress', 'Show progress for large batches')
   .option('-v, --verbose', 'Verbose output')
   .action(async (targets: string[], options) => {
@@ -40,6 +41,7 @@ program
       provider,
       json: options.json,
       verbose: options.verbose,
+      dbPath: options.dbPath,
       apiKey: process.env.IPINFO_TOKEN,
       concurrency: parseInt(options.concurrency, 10) || 10,
     };
