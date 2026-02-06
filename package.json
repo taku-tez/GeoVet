@@ -1,0 +1,56 @@
+{
+  "name": "geovet",
+  "version": "0.1.0",
+  "description": "IP/Endpoint Geolocation CLI - ASM向け地理情報特定ツール",
+  "main": "dist/index.js",
+  "bin": {
+    "geovet": "dist/cli.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taku-tez/GeoVet.git"
+  },
+  "keywords": [
+    "geolocation",
+    "ip",
+    "geoip",
+    "maxmind",
+    "geolite2",
+    "asm",
+    "security",
+    "cli"
+  ],
+  "author": "taku-tez",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/taku-tez/GeoVet/issues"
+  },
+  "homepage": "https://github.com/taku-tez/GeoVet#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "maxmind": "^4.3.24",
+    "tar-stream": "^3.1.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "@types/tar-stream": "^3.1.4",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.5"
+  }
+}
