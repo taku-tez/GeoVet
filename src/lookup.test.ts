@@ -83,6 +83,39 @@ describe('lookup', () => {
   });
 });
 
+describe('parallel processing', () => {
+  it('should process batch in parallel', async () => {
+    const options: LookupOptions = { provider: 'ipinfo', concurrency: 5 };
+    const targets = ['8.8.8.8', '1.1.1.1', '8.8.4.4'];
+    
+    const start = Date.now();
+    const results = await lookupBatch(targets, options);
+    const duration = Date.now() - start;
+    
+    expect(results).toHaveLength(3);
+    // Parallel should be faster than 3x sequential (~150ms each)
+    // Allow some buffer for slow networks
+    expect(duration).toBeLessThan(2000);
+  });
+
+  it('should call onProgress callback', async () => {
+    const progressCalls: Array<[number, number]> = [];
+    const options: LookupOptions = {
+      provider: 'ipinfo',
+      concurrency: 2,
+      onProgress: (completed, total) => {
+        progressCalls.push([completed, total]);
+      },
+    };
+    
+    const targets = ['8.8.8.8', '1.1.1.1'];
+    await lookupBatch(targets, options);
+    
+    expect(progressCalls.length).toBeGreaterThan(0);
+    expect(progressCalls[progressCalls.length - 1]).toEqual([2, 2]);
+  });
+});
+
 describe('formatter', () => {
   it('placeholder', () => {
     // Formatter tests could be added here

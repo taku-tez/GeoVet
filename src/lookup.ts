@@ -86,16 +86,52 @@ export async function lookup(input: string, options: LookupOptions): Promise<Geo
   return { ...result, input };
 }
 
+/**
+ * Process items with limited concurrency
+ */
+async function parallelMap<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency: number,
+  onProgress?: (completed: number, total: number) => void
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let index = 0;
+  let completed = 0;
+  const total = items.length;
+
+  async function worker(): Promise<void> {
+    while (index < items.length) {
+      const currentIndex = index++;
+      results[currentIndex] = await fn(items[currentIndex]);
+      completed++;
+      onProgress?.(completed, total);
+    }
+  }
+
+  // Start workers
+  const workers = Array(Math.min(concurrency, items.length))
+    .fill(null)
+    .map(() => worker());
+
+  await Promise.all(workers);
+  return results;
+}
+
 export async function lookupBatch(
   inputs: string[],
   options: LookupOptions
 ): Promise<GeoResult[]> {
-  const results: GeoResult[] = [];
+  const concurrency = options.concurrency ?? 10;
 
-  for (const input of inputs) {
-    const result = await lookup(input, options);
-    results.push(result);
-  }
+  // For local provider, use higher concurrency (no rate limit)
+  const effectiveConcurrency =
+    options.provider === 'local' ? Math.max(concurrency, 50) : concurrency;
 
-  return results;
+  return parallelMap(
+    inputs,
+    (input) => lookup(input, options),
+    effectiveConcurrency,
+    options.onProgress
+  );
 }

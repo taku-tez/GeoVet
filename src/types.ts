@@ -38,6 +38,8 @@ export interface LookupOptions {
   verbose?: boolean;
   dbPath?: string;
   apiKey?: string;
+  concurrency?: number;
+  onProgress?: (completed: number, total: number) => void;
 }
 
 export interface GeoProvider {

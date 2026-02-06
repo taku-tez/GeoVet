@@ -31,6 +31,8 @@ program
   .option('--stdin', 'Read targets from stdin')
   .option('-j, --json', 'Output as JSON')
   .option('--summary', 'Show summary statistics')
+  .option('-c, --concurrency <num>', 'Parallel lookups (default: 10, local: 50)', '10')
+  .option('--progress', 'Show progress for large batches')
   .option('-v, --verbose', 'Verbose output')
   .action(async (targets: string[], options) => {
     const provider = options.provider as ProviderType;
@@ -39,6 +41,7 @@ program
       json: options.json,
       verbose: options.verbose,
       apiKey: process.env.IPINFO_TOKEN,
+      concurrency: parseInt(options.concurrency, 10) || 10,
     };
 
     let inputs: string[] = [...targets];
@@ -80,8 +83,22 @@ program
       process.exit(1);
     }
 
+    // Progress callback
+    if (options.progress && inputs.length > 1 && !options.json) {
+      lookupOptions.onProgress = (completed, total) => {
+        const pct = Math.round((completed / total) * 100);
+        const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
+        process.stderr.write(`\r${bar} ${pct}% (${completed}/${total})`);
+      };
+    }
+
     // Perform lookups
     const results = await lookupBatch(inputs, lookupOptions);
+
+    // Clear progress line
+    if (options.progress && inputs.length > 1 && !options.json) {
+      process.stderr.write('\r' + ' '.repeat(50) + '\r');
+    }
 
     // Output
     console.log(formatResults(results, options.json));
