@@ -170,8 +170,13 @@ describe('lookup', () => {
       const options: LookupOptions = { provider: 'local' };
       const result = await lookup('8.8.8.8', options);
       
-      // DB won't be installed in test env
-      expect(result.error).toContain('GeoLite2 database not found');
+      // DB won't be installed in test env (unless installed)
+      if (result.error) {
+        expect(result.error).toContain('GeoLite2 database not found');
+      } else {
+        // DB is installed, should have geo data
+        expect(result.geo.ip).toBe('8.8.8.8');
+      }
     });
   });
 
@@ -249,9 +254,307 @@ describe('CDN detection', () => {
   });
 });
 
+describe('AAAA-only domains', () => {
+  it('should resolve IPv6-only domains', async () => {
+    // Mock a domain that only has AAAA record
+    dnsMocks.resolve4.mockImplementationOnce(async () => []);
+    dnsMocks.resolve6.mockImplementationOnce(async () => ['2001:4860:4860::8888']);
+    
+    const result = await lookup('ipv6only.example.com', { provider: 'ipinfo' });
+    
+    expect(result.ip).toBe('2001:4860:4860::8888');
+    expect(result.error).toBeUndefined();
+  });
+});
+
+describe('CDN detection - hostname patterns', () => {
+  it('should detect CloudFront by hostname', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    const info = detectCdn('1.2.3.4', undefined, 'd123456.cloudfront.net');
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toContain('CloudFront');
+  });
+
+  it('should detect Akamai by hostname', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    const info = detectCdn('1.2.3.4', undefined, 'example.akamaiedge.net');
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toBe('Akamai');
+  });
+
+  it('should detect Fastly by hostname', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    const info = detectCdn('1.2.3.4', undefined, 'example.fastly.net');
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toBe('Fastly');
+  });
+
+  it('should detect GitHub Pages by hostname', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    const info = detectCdn('1.2.3.4', undefined, 'example.github.io');
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toBe('GitHub Pages');
+  });
+
+  it('should detect Vercel by hostname', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    const info = detectCdn('1.2.3.4', undefined, 'example.vercel.app');
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toBe('Vercel');
+  });
+
+  it('should detect Netlify by hostname', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    const info = detectCdn('1.2.3.4', undefined, 'example.netlify.app');
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toBe('Netlify');
+  });
+});
+
+describe('CDN detection - IP prefixes', () => {
+  it('should detect Cloudflare by IP prefix', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    // 104.16.0.0/12 is Cloudflare
+    const info = detectCdn('104.16.1.1', undefined, undefined);
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toBe('Cloudflare');
+  });
+
+  it('should detect Fastly by IP prefix', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    // 151.101.0.0/16 is Fastly
+    const info = detectCdn('151.101.1.1', undefined, undefined);
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toBe('Fastly');
+  });
+
+  it('should not detect unknown IPs', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    // Random private IP
+    const info = detectCdn('192.168.1.1', undefined, undefined);
+    
+    expect(info.isCdn).toBe(false);
+  });
+});
+
+describe('CDN detection - IPv6', () => {
+  it('should detect Cloudflare by IPv6 prefix', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    // 2606:4700::/32 is Cloudflare
+    const info = detectCdn('2606:4700:10::1', undefined, undefined);
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toBe('Cloudflare');
+  });
+
+  it('should detect Fastly by IPv6 prefix', async () => {
+    const { detectCdn } = await import('./cdn.js');
+    // 2a04:4e42::/32 is Fastly
+    const info = detectCdn('2a04:4e42::1', undefined, undefined);
+    
+    expect(info.isCdn).toBe(true);
+    expect(info.provider).toBe('Fastly');
+  });
+});
+
 describe('formatter', () => {
-  it('placeholder', () => {
-    // Formatter tests could be added here
-    expect(true).toBe(true);
+  it('should format successful result', async () => {
+    const { formatResult } = await import('./formatter.js');
+    const result = {
+      input: 'example.com',
+      ip: '1.2.3.4',
+      geo: {
+        ip: '1.2.3.4',
+        city: 'Tokyo',
+        region: 'Tokyo',
+        countryCode: 'JP',
+        latitude: 35.6893,
+        longitude: 139.6899,
+        timezone: 'Asia/Tokyo',
+      },
+      network: { asn: 12345, org: 'Example ISP' },
+      provider: 'ipinfo' as const,
+    };
+    
+    const output = formatResult(result, false);
+    
+    expect(output).toContain('example.com');
+    expect(output).toContain('1.2.3.4');
+    expect(output).toContain('Tokyo');
+    expect(output).toContain('JP');
+    expect(output).toContain('AS12345');
+    expect(output).toContain('Example ISP');
+  });
+
+  it('should format error result', async () => {
+    const { formatResult } = await import('./formatter.js');
+    const result = {
+      input: 'invalid.test',
+      ip: '',
+      geo: { ip: '' },
+      provider: 'ipinfo' as const,
+      error: 'Could not resolve: invalid.test',
+    };
+    
+    const output = formatResult(result, false);
+    
+    expect(output).toContain('invalid.test');
+    expect(output).toContain('Could not resolve');
+  });
+
+  it('should format CDN warning', async () => {
+    const { formatResult } = await import('./formatter.js');
+    const result = {
+      input: 'cdn.example.com',
+      ip: '1.2.3.4',
+      geo: { ip: '1.2.3.4', city: 'New York' },
+      provider: 'ipinfo' as const,
+      cdn: {
+        isCdn: true,
+        provider: 'Cloudflare',
+        type: 'cdn' as const,
+        note: 'Detected by ASN',
+      },
+    };
+    
+    const output = formatResult(result, false);
+    
+    expect(output).toContain('Cloudflare');
+    expect(output).toContain('CDN');
+    expect(output).toContain('edge server');
+  });
+
+  it('should format cloud warning', async () => {
+    const { formatResult } = await import('./formatter.js');
+    const result = {
+      input: 'app.example.com',
+      ip: '1.2.3.4',
+      geo: { ip: '1.2.3.4', city: 'Virginia' },
+      provider: 'ipinfo' as const,
+      cdn: {
+        isCdn: true,
+        provider: 'AWS',
+        type: 'cloud' as const,
+      },
+    };
+    
+    const output = formatResult(result, false);
+    
+    expect(output).toContain('AWS');
+    expect(output).toContain('Cloud');
+    expect(output).toContain('cloud region');
+  });
+
+  it('should format JSON output', async () => {
+    const { formatResult } = await import('./formatter.js');
+    const result = {
+      input: 'test.com',
+      ip: '1.2.3.4',
+      geo: { ip: '1.2.3.4', countryCode: 'US' },
+      provider: 'ipinfo' as const,
+    };
+    
+    const output = formatResult(result, true);
+    const parsed = JSON.parse(output);
+    
+    expect(parsed.input).toBe('test.com');
+    expect(parsed.ip).toBe('1.2.3.4');
+  });
+
+  it('should show network with org only (no ASN)', async () => {
+    const { formatResult } = await import('./formatter.js');
+    const result = {
+      input: 'example.com',
+      ip: '1.2.3.4',
+      geo: { ip: '1.2.3.4' },
+      provider: 'ipinfo' as const,
+      network: { org: 'Unknown ISP' }, // No ASN
+    };
+    
+    const output = formatResult(result, false);
+    
+    expect(output).toContain('Network');
+    expect(output).toContain('Unknown ISP');
+  });
+
+  it('should format coordinates', async () => {
+    const { formatResult } = await import('./formatter.js');
+    const result = {
+      input: 'geo.test',
+      ip: '1.2.3.4',
+      geo: {
+        ip: '1.2.3.4',
+        latitude: 35.6893,
+        longitude: 139.6899,
+      },
+      provider: 'ipinfo' as const,
+    };
+    
+    const output = formatResult(result, false);
+    
+    expect(output).toContain('Coordinates');
+    expect(output).toContain('35.6893');
+    expect(output).toContain('139.6899');
+  });
+});
+
+describe('formatter summary', () => {
+  it('should show country distribution', async () => {
+    const { formatSummary } = await import('./formatter.js');
+    const results = [
+      { input: 'a', ip: '1.1.1.1', geo: { ip: '1.1.1.1', countryCode: 'US' }, provider: 'ipinfo' as const },
+      { input: 'b', ip: '2.2.2.2', geo: { ip: '2.2.2.2', countryCode: 'US' }, provider: 'ipinfo' as const },
+      { input: 'c', ip: '3.3.3.3', geo: { ip: '3.3.3.3', countryCode: 'JP' }, provider: 'ipinfo' as const },
+      { input: 'd', ip: '', geo: { ip: '' }, provider: 'ipinfo' as const, error: 'fail' },
+    ];
+    
+    const output = formatSummary(results);
+    
+    expect(output).toContain('Total: 4');
+    expect(output).toContain('3'); // Success count
+    expect(output).toContain('US');
+    expect(output).toContain('JP');
+  });
+});
+
+describe('CLI validation', () => {
+  it('should reject zero concurrency', async () => {
+    const { execSync } = await import('child_process');
+    
+    try {
+      execSync('npx tsx src/cli.ts lookup 8.8.8.8 -c 0', {
+        cwd: process.cwd(),
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      expect.fail('Should have thrown');
+    } catch (e: unknown) {
+      const err = e as { stderr?: string; message?: string };
+      expect(err.stderr || err.message).toContain('positive integer');
+    }
+  });
+
+  it('should reject negative concurrency', async () => {
+    const { execSync } = await import('child_process');
+    
+    try {
+      execSync('npx tsx src/cli.ts lookup 8.8.8.8 -c -5', {
+        cwd: process.cwd(),
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      expect.fail('Should have thrown');
+    } catch (e: unknown) {
+      const err = e as { stderr?: string; message?: string };
+      expect(err.stderr || err.message).toContain('positive integer');
+    }
   });
 });

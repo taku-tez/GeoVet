@@ -174,9 +174,11 @@ async function extractMmdb(tarPath: string, destDir: string, edition: string): P
   return new Promise((resolve, reject) => {
     const extract = tarStream.extract();
     const targetFile = `${edition}.mmdb`;
+    let foundMmdb = false;
 
     extract.on('entry', (header: Headers, stream: PassThrough, next: () => void) => {
       if (header.name.endsWith('.mmdb')) {
+        foundMmdb = true;
         const destPath = join(destDir, targetFile);
         const writeStream = createWriteStream(destPath);
         stream.pipe(writeStream);
@@ -188,7 +190,13 @@ async function extractMmdb(tarPath: string, destDir: string, edition: string): P
       }
     });
 
-    extract.on('finish', resolve);
+    extract.on('finish', () => {
+      if (!foundMmdb) {
+        reject(new Error(`No .mmdb file found in archive for ${edition}`));
+      } else {
+        resolve();
+      }
+    });
     extract.on('error', reject);
 
     createReadStream(tarPath)

@@ -83,6 +83,44 @@ local → ipinfo の順に試行。
 geovet lookup 8.8.8.8 --provider auto
 ```
 
+## CLI Options
+
+### lookup コマンド
+
+```bash
+geovet lookup [targets...] [options]
+```
+
+| オプション | 説明 | デフォルト |
+|-----------|------|-----------|
+| `-p, --provider <type>` | プロバイダー: `local`, `ipinfo`, `auto` | `local` |
+| `-f, --file <path>` | ターゲットをファイルから読み込み（1行1ターゲット） | - |
+| `--stdin` | 標準入力からターゲットを読み込み | - |
+| `-j, --json` | JSON形式で出力 | - |
+| `--summary` | 国別分布などのサマリー統計を表示 | - |
+| `-c, --concurrency <num>` | 並列処理数（1-100推奨） | 50 (local) / 10 (ipinfo) |
+| `--progress` | 大量処理時にプログレスバー表示 | - |
+| `-v, --verbose` | 詳細出力 | - |
+
+### 使用例
+
+```bash
+# 基本
+geovet lookup 8.8.8.8
+
+# バッチ処理（ファイルから + 並列20）
+geovet lookup -f targets.txt -c 20 --progress
+
+# パイプ + サマリー
+cat ips.txt | geovet lookup --stdin --summary
+
+# CSVから抽出してスキャン
+cat hosts.csv | tail -n +2 | cut -d',' -f1 | geovet lookup --stdin --progress -c 10
+
+# JSON出力（jqで加工）
+geovet lookup 8.8.8.8 1.1.1.1 --json | jq '.[] | select(.cdn.isCdn)'
+```
+
 ## Output
 
 ### Table (default)

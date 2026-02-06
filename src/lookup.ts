@@ -29,22 +29,25 @@ async function resolveToIp(input: string): Promise<{ ip: string; error?: string 
     return { ip: input };
   }
 
-  // Domain - resolve to IP
+  // Domain - resolve to IP (try IPv4 first, then IPv6)
+  // Try IPv4
   try {
     const addresses = await resolve4(input);
     if (addresses.length > 0) {
       return { ip: addresses[0] };
     }
   } catch {
-    // Try IPv6
-    try {
-      const addresses = await resolve6(input);
-      if (addresses.length > 0) {
-        return { ip: addresses[0] };
-      }
-    } catch {
-      // Fall through
+    // IPv4 failed, will try IPv6
+  }
+
+  // Try IPv6 (also when IPv4 returns empty array - AAAA-only domains)
+  try {
+    const addresses = await resolve6(input);
+    if (addresses.length > 0) {
+      return { ip: addresses[0] };
     }
+  } catch {
+    // Both failed
   }
 
   return { ip: '', error: `Could not resolve: ${input}` };

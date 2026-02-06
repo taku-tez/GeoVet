@@ -38,15 +38,27 @@ program
   .option('-v, --verbose', 'Verbose output')
   .action(async (targets: string[], options) => {
     const provider = options.provider as ProviderType;
-    const parsedConcurrency = options.concurrency
-      ? parseInt(options.concurrency, 10)
-      : undefined;
+    
+    // Validate concurrency
+    let concurrency: number | undefined;
+    if (options.concurrency) {
+      const parsed = parseInt(options.concurrency, 10);
+      if (isNaN(parsed) || parsed < 1) {
+        console.error('Error: --concurrency must be a positive integer');
+        process.exit(1);
+      }
+      if (parsed > 100) {
+        console.error('Warning: High concurrency (>100) may cause rate limiting or connection issues');
+      }
+      concurrency = parsed;
+    }
+
     const lookupOptions: LookupOptions = {
       provider,
       json: options.json,
       verbose: options.verbose,
       apiKey: process.env.IPINFO_TOKEN,
-      concurrency: Number.isFinite(parsedConcurrency) ? parsedConcurrency : undefined,
+      concurrency,
     };
 
     let inputs: string[] = [...targets];

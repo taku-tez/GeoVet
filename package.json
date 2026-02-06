@@ -1,6 +1,6 @@
 {
   "name": "geovet",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "IP/Endpoint Geolocation CLI - ASM向け地理情報特定ツール",
   "main": "dist/index.js",
   "bin": {

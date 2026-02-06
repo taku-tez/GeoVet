@@ -45,10 +45,11 @@ export function formatResult(result: GeoResult, json: boolean = false): string {
     parts.push(`  ${chalk.dim('Timezone:')} ${result.geo.timezone}`);
   }
 
-  if (result.network?.asn) {
-    parts.push(
-      `  ${chalk.dim('Network:')} AS${result.network.asn} ${result.network.org || ''}`
-    );
+  if (result.network?.asn || result.network?.org) {
+    const networkStr = result.network.asn
+      ? `AS${result.network.asn}${result.network.org ? ' ' + result.network.org : ''}`
+      : result.network.org || '';
+    parts.push(`  ${chalk.dim('Network:')} ${networkStr}`);
   }
 
   if (result.cdn?.isCdn) {
