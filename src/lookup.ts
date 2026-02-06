@@ -7,6 +7,7 @@ import { resolve4, resolve6 } from 'dns/promises';
 import type { GeoResult, GeoProvider, LookupOptions, ProviderType } from './types.js';
 import { localProvider } from './providers/local.js';
 import { createIpinfoProvider } from './providers/ipinfo.js';
+import { detectCdn } from './cdn.js';
 
 function getProvider(type: ProviderType, apiKey?: string): GeoProvider {
   switch (type) {
@@ -63,27 +64,45 @@ export async function lookup(input: string, options: LookupOptions): Promise<Geo
   }
 
   const apiKey = options.apiKey || process.env.IPINFO_TOKEN;
+  let result: GeoResult;
 
   // Handle auto provider
   if (options.provider === 'auto') {
     // Try local first
     const local = localProvider;
     if (await local.isAvailable()) {
-      const result = await local.lookup(ip);
-      if (!result.error) {
-        return { ...result, input };
+      const localResult = await local.lookup(ip);
+      if (!localResult.error) {
+        result = { ...localResult, input };
+      } else {
+        // Fallback to ipinfo
+        const ipinfo = createIpinfoProvider(apiKey);
+        result = { ...(await ipinfo.lookup(ip)), input };
       }
+    } else {
+      // Fallback to ipinfo
+      const ipinfo = createIpinfoProvider(apiKey);
+      result = { ...(await ipinfo.lookup(ip)), input };
     }
-
-    // Fallback to ipinfo
-    const ipinfo = createIpinfoProvider(apiKey);
-    const result = await ipinfo.lookup(ip);
-    return { ...result, input };
+  } else {
+    const provider = getProvider(options.provider, apiKey);
+    result = { ...(await provider.lookup(ip)), input };
   }
 
-  const provider = getProvider(options.provider, apiKey);
-  const result = await provider.lookup(ip);
-  return { ...result, input };
+  // Detect CDN
+  if (!result.error) {
+    const cdnInfo = detectCdn(
+      result.ip,
+      result.network?.asn,
+      // Pass original input if it was a hostname
+      isIP(input) ? undefined : input
+    );
+    if (cdnInfo.isCdn) {
+      result.cdn = cdnInfo;
+    }
+  }
+
+  return result;
 }
 
 /**

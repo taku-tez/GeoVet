@@ -20,11 +20,18 @@ export interface NetworkInfo {
   isp?: string;
 }
 
+export interface CdnInfo {
+  isCdn: boolean;
+  provider?: string;
+  note?: string;
+}
+
 export interface GeoResult {
   input: string;
   ip: string;
   geo: GeoLocation;
   network?: NetworkInfo;
+  cdn?: CdnInfo;
   provider: ProviderType;
   cached?: boolean;
   error?: string;

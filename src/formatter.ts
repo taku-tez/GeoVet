@@ -51,6 +51,12 @@ export function formatResult(result: GeoResult, json: boolean = false): string {
     );
   }
 
+  if (result.cdn?.isCdn) {
+    parts.push(
+      `  ${chalk.yellow('⚠ CDN:')} ${result.cdn.provider} - ${chalk.dim('Location is edge server, not origin')}`
+    );
+  }
+
   parts.push(`  ${chalk.dim('Provider:')} ${result.provider}`);
 
   return parts.join('\n');

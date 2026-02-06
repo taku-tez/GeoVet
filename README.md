@@ -11,7 +11,9 @@ IP/Endpoint Geolocation CLI - ASM向け地理情報特定ツール
 - 🚀 ローカルDB（GeoLite2）で高速処理
 - 🌍 ipinfo.io APIで最新データ取得
 - 📊 バッチ処理・パイプ入力対応
+- ⚡ 並列処理で大量IP高速処理
 - 🔄 自動フォールバック（auto provider）
+- ⚠️ **CDN検出** - CloudFront/Cloudflare/Akamai等を自動検出
 
 ## Installation
 
@@ -133,6 +135,29 @@ geovet db update --license-key YOUR_KEY
 ```
 
 DBは `~/.geovet/` に保存されます。
+
+## CDN Detection
+
+GeoVetはCDN/クラウドプロバイダーを自動検出し、警告を表示します。
+
+```
+✓ example.com
+  IP: 13.33.235.123
+  Location: Helsinki, Uusimaa, FI
+  Network: AS16509 Amazon.com, Inc.
+  ⚠ CDN: Amazon CloudFront - Location is edge server, not origin
+```
+
+**検出対応プロバイダー:**
+- Amazon CloudFront
+- Cloudflare
+- Akamai
+- Fastly
+- Azure CDN
+- Google Cloud CDN
+- その他多数
+
+**注意:** CDN経由のサイトは、オリジンサーバーの場所ではなく、リクエスト元に近いエッジサーバーの場所が表示されます。
 
 ## Use Cases (ASM)
 
