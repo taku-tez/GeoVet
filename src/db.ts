@@ -74,28 +74,34 @@ export async function downloadDb(licenseKey: string): Promise<void> {
     const tempPath = join(dataDir, `${edition}.tar.gz`);
     const fileStream = createWriteStream(tempPath);
 
-    // Convert web stream to node stream
-    const reader = response.body.getReader();
-    const nodeStream = new ReadableStream({
-      async pull(controller) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.close();
-        } else {
-          controller.enqueue(value);
-        }
-      },
-    });
+    try {
+      // Convert web stream to node stream
+      const reader = response.body.getReader();
+      const nodeStream = new ReadableStream({
+        async pull(controller) {
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.close();
+          } else {
+            controller.enqueue(value);
+          }
+        },
+      });
 
-    // @ts-ignore - Node 18+ supports this
-    await pipeline(nodeStream, fileStream);
+      // @ts-ignore - Node 18+ supports this
+      await pipeline(nodeStream, fileStream);
 
-    // Extract mmdb file from tar.gz
-    console.log(`Extracting ${edition}...`);
-    await extractMmdb(tempPath, dataDir, edition);
-
-    // Cleanup temp file
-    await rm(tempPath);
+      // Extract mmdb file from tar.gz
+      console.log(`Extracting ${edition}...`);
+      await extractMmdb(tempPath, dataDir, edition);
+    } finally {
+      try {
+        // Cleanup temp file
+        await rm(tempPath);
+      } catch (error) {
+        console.warn(`temp cleanup failed for ${edition}: ${formatDownloadError(error)}`);
+      }
+    }
 
     console.log(`✓ ${edition} updated`);
   }
