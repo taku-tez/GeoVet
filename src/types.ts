@@ -23,6 +23,7 @@ export interface NetworkInfo {
 export interface CdnInfo {
   isCdn: boolean;
   provider?: string;
+  type?: 'cdn' | 'cloud' | 'hosting' | 'security';
   note?: string;
 }
 

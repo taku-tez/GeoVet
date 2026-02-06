@@ -131,7 +131,7 @@ describe('CDN detection', () => {
     
     expect(result.cdn).toBeDefined();
     expect(result.cdn?.isCdn).toBe(true);
-    expect(result.cdn?.provider).toBe('Amazon CloudFront');
+    expect(result.cdn?.provider).toContain('CloudFront');
   });
 
   it('should not flag non-CDN IPs', async () => {

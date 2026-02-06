@@ -52,8 +52,20 @@ export function formatResult(result: GeoResult, json: boolean = false): string {
   }
 
   if (result.cdn?.isCdn) {
+    const typeLabels: Record<string, string> = {
+      cdn: 'CDN',
+      cloud: 'Cloud',
+      hosting: 'Hosting',
+      security: 'WAF/Security',
+    };
+    const label = typeLabels[result.cdn.type || 'cdn'] || 'CDN';
+    const locationNote = result.cdn.type === 'cdn' 
+      ? 'edge server' 
+      : result.cdn.type === 'cloud' 
+        ? 'cloud region' 
+        : 'provider location';
     parts.push(
-      `  ${chalk.yellow('⚠ CDN:')} ${result.cdn.provider} - ${chalk.dim('Location is edge server, not origin')}`
+      `  ${chalk.yellow(`⚠ ${label}:`)} ${result.cdn.provider} - ${chalk.dim(`Location is ${locationNote}, not origin`)}`
     );
   }
 
