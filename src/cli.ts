@@ -9,17 +9,19 @@
 import { program } from 'commander';
 import { createInterface } from 'readline';
 import { readFile } from 'fs/promises';
+import { createRequire } from 'module';
 import { lookup, lookupBatch } from './lookup.js';
 import { downloadDb, getDbStatus, formatDbStatus } from './db.js';
 import { formatResult, formatResults, formatSummary } from './formatter.js';
 import type { ProviderType, LookupOptions } from './types.js';
 
-const VERSION = '0.1.0';
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json') as { version: string };
 
 program
   .name('geovet')
   .description('IP/Endpoint Geolocation CLI - ASM向け地理情報特定ツール')
-  .version(VERSION);
+  .version(version);
 
 // lookup command
 program
