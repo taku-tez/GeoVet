@@ -31,17 +31,20 @@ program
   .option('--stdin', 'Read targets from stdin')
   .option('-j, --json', 'Output as JSON')
   .option('--summary', 'Show summary statistics')
-  .option('-c, --concurrency <num>', 'Parallel lookups (default: 10, local: 50)', '10')
+  .option('-c, --concurrency <num>', 'Parallel lookups (default: 50, non-local: 10)')
   .option('--progress', 'Show progress for large batches')
   .option('-v, --verbose', 'Verbose output')
   .action(async (targets: string[], options) => {
     const provider = options.provider as ProviderType;
+    const parsedConcurrency = options.concurrency
+      ? parseInt(options.concurrency, 10)
+      : undefined;
     const lookupOptions: LookupOptions = {
       provider,
       json: options.json,
       verbose: options.verbose,
       apiKey: process.env.IPINFO_TOKEN,
-      concurrency: parseInt(options.concurrency, 10) || 10,
+      concurrency: Number.isFinite(parsedConcurrency) ? parsedConcurrency : undefined,
     };
 
     let inputs: string[] = [...targets];

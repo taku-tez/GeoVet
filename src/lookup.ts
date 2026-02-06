@@ -141,11 +141,8 @@ export async function lookupBatch(
   inputs: string[],
   options: LookupOptions
 ): Promise<GeoResult[]> {
-  const concurrency = options.concurrency ?? 10;
-
-  // For local provider, use higher concurrency (no rate limit)
   const effectiveConcurrency =
-    options.provider === 'local' ? Math.max(concurrency, 50) : concurrency;
+    options.provider === 'local' ? (options.concurrency ?? 50) : (options.concurrency ?? 10);
 
   return parallelMap(
     inputs,
