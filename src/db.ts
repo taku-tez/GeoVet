@@ -15,6 +15,8 @@ import type { PassThrough } from 'stream';
 import { getDataDir, ensureDataDir } from './providers/local.js';
 
 const GEOLITE2_EDITIONS = ['GeoLite2-City', 'GeoLite2-ASN'] as const;
+const DOWNLOAD_TIMEOUT_MS = 20000;
+const DOWNLOAD_RETRIES = 2;
 
 interface DbStatus {
   edition: string;
@@ -61,18 +63,8 @@ export async function downloadDb(licenseKey: string): Promise<void> {
   const dataDir = getDataDir();
 
   for (const edition of GEOLITE2_EDITIONS) {
-    console.log(`Downloading ${edition}...`);
-
     const url = `https://download.maxmind.com/app/geoip_download?edition_id=${edition}&license_key=${licenseKey}&suffix=tar.gz`;
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error('Invalid license key. Get one at https://www.maxmind.com/en/geolite2/signup');
-      }
-      throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-    }
+    const response = await fetchWithRetry(url, edition);
 
     if (!response.body) {
       throw new Error('No response body');
@@ -107,6 +99,75 @@ export async function downloadDb(licenseKey: string): Promise<void> {
 
     console.log(`✓ ${edition} updated`);
   }
+}
+
+async function fetchWithRetry(url: string, edition: string): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= DOWNLOAD_RETRIES; attempt += 1) {
+    const attemptLabel = `(${attempt + 1}/${DOWNLOAD_RETRIES + 1})`;
+    console.log(`Downloading ${edition} ${attemptLabel}...`);
+
+    try {
+      const response = await fetchWithTimeout(url, DOWNLOAD_TIMEOUT_MS);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Invalid license key. Get one at https://www.maxmind.com/en/geolite2/signup');
+        }
+
+        if (response.status >= 500 && attempt < DOWNLOAD_RETRIES) {
+          console.warn(`Server error ${response.status}. Retrying ${edition} download...`);
+          continue;
+        }
+
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt < DOWNLOAD_RETRIES) {
+        console.warn(`Retrying ${edition} download after error: ${formatDownloadError(error)}`);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Download failed');
+}
+
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error(
+        `Download timed out after ${Math.round(timeoutMs / 1000)} seconds. Please check your connection and try again.`,
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  return 'name' in error && error.name === 'AbortError';
+}
+
+function formatDownloadError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Unknown error';
 }
 
 async function extractMmdb(tarPath: string, destDir: string, edition: string): Promise<void> {
