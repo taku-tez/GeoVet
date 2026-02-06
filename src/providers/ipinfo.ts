@@ -3,11 +3,22 @@
  */
 
 import type { GeoProvider, GeoResult } from '../types.js';
+import { createRequire } from 'node:module';
 
 const API_BASE = 'https://ipinfo.io';
 const TIMEOUT_MS = 10000; // 10 seconds
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
+const DEFAULT_USER_AGENT = 'GeoVet';
+const USER_AGENT = (() => {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkg = require('../../package.json') as { version?: string };
+    return pkg?.version ? `${DEFAULT_USER_AGENT}/${pkg.version}` : DEFAULT_USER_AGENT;
+  } catch {
+    return DEFAULT_USER_AGENT;
+  }
+})();
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -55,7 +66,7 @@ export function createIpinfoProvider(apiKey?: string): GeoProvider {
             {
               headers: {
                 Accept: 'application/json',
-                'User-Agent': 'GeoVet/0.3.0',
+                'User-Agent': USER_AGENT,
               },
             },
             TIMEOUT_MS
